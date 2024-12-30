@@ -1,0 +1,54 @@
+version: "3.9"
+
+volumes:
+  letsencrypt-certificates: { }
+
+
+
+services:
+
+  glpi:
+    image: jr0w3/glpi:latest
+    container_name: glpi
+    restart: unless-stopped
+
+    environment:
+      MYSQL_PASSWORD: "${db_password}"
+      MYSQL_DATABASE: "${db_name}"
+      MYSQL_USER: "${db_user}"
+      MYSQL_HOST: "${db_ip}:${db_port}"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.glpi.rule=Host(`${dns}`)"
+      - "traefik.http.routers.glpi.entrypoints=websecure"
+      - "traefik.http.routers.glpi.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.glpi.middlewares=compresstraefik"
+      - "traefik.http.middlewares.compresstraefik.compress=true"
+      - "traefik.http.services.glpiservice.loadbalancer.server.port=80"
+
+  traefik:
+    image: traefik:v2.9
+    container_name: traefik
+    restart: unless-stopped
+
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.endpoint=unix:///var/run/docker.sock"
+      - "--providers.docker.exposedByDefault=false"
+      - "--entryPoints.web.address=:80"
+      - "--entryPoints.web.forwardedHeaders.insecure"
+      - "--entryPoints.web.proxyProtocol.insecure"
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+      - "--entryPoints.websecure.address=:443"
+      - "--entryPoints.websecure.forwardedHeaders.insecure"
+      - "--entryPoints.websecure.proxyProtocol.insecure"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.email=ahdi@outlook.fr"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "letsencrypt-certificates:/letsencrypt"
